@@ -1,0 +1,116 @@
+<?php
+/**
+ * @file
+ */
+ 
+/**
+ * Implements hook_form_alter().
+ */
+function mnn_reservations_form_alter(&$form, &$form_state, $form_id) {
+  if (isset($form['type']['#value'])
+          && $form['type']['#value'] == 'reservations_reservation'
+          && $form['#node_edit_form'] == TRUE) {
+
+    global $user;
+    $nid = $form['nid']['#value'];
+    $status = $form['reservations_reservation_status']['#default_value'];
+
+    $status = isset($form['reservations_reservation_status']['#value'])
+      ? $form['reservations_reservation_status']['#value'] : 
+      $form['reservations_reservation_status']['#default_value'];
+
+    $uid = $form['uid']['#value'];
+
+    $edit_mode = $nid ? TRUE : FALSE;
+    $is_author = ($user->uid == $uid) ? TRUE : FALSE;
+    $is_manager = user_access("manage reservations") ? TRUE : FALSE;
+    $unconfirmed = ($status == RESERVATIONS_STATUS_UNCONFIRMED) ?
+      TRUE : FALSE;
+    
+    $deny_access =
+      ($is_manager || !$edit_mode || ($unconfirmed && $is_author) ) ?
+      FALSE : TRUE;
+
+    /**
+    dsm($nid, 'nid');
+    dsm($status, 'status');
+    dsm($uid, 'uid');
+    dsm($edit_mode, 'edit mode');
+    dsm($is_author, 'is author');
+    dsm($unconfirmed, 'unconfirmed');
+    dsm($is_manager, 'is manager');
+    dsm($deny_access, 'deny access');
+    dsm($form, "my form");
+    */
+
+    if (!$is_manager) {
+      // don't show revisions tab at bottom of form
+      $form['revision_information']['#access'] = FALSE;
+    }
+    
+    if ($deny_access ) {
+      drupal_set_message(t("Sorry, you cannot edit your reservation once it ".
+			   "has been confirmed/cancelled by a staff person."), 
+			 'error');
+      drupal_goto('user');
+      return;
+    }
+
+    $choice_wrapper =$form['choice_wrapper']['reservations_reservation_items'];
+    foreach ($choice_wrapper as $choice=>$choice_array) {
+      if (is_array($choice_array) && isset($choice_array['ops'])) {
+	$place_nid = $choice_array['reservations_placeholder_nid']['#value'];
+	$form['choice_wrapper']['reservations_reservation_items'][$choice]
+	  ['ops']['#markup'] = l('remove', "node/".$place_nid."/delete", 
+				 array('query'=>array('destination'=> 
+						      "node/".$nid."/edit")));
+      }
+    }
+
+    ///make sure the project get set correctly on the reservations
+    if ($form['og_node1'][LANGUAGE_NONE][0]['admin'] &&
+	!$form['og_node1'][LANGUAGE_NONE][0]['admin'][0]
+	['target_id']['#default_value'] && $form['#node']) {
+
+      $project_nid = $form['#node']->og_node1[LANGUAGE_NONE][0]['target_id'];
+      $project = $project_nid ? node_load($project_nid) : NULL;
+      if ($project) {
+	$form['og_node1'][LANGUAGE_NONE][0]['admin'][0]['target_id']
+	  ['#default_value'] = $project->title . ' (' . $project_nid . ')';
+      }
+    }
+  }
+}
+
+function mnn_reservations_node_access($node, $op, $account) {
+  if (is_string($node) || !$node->nid) {
+    return NODE_ACCESS_IGNORE;
+  }
+
+  $inventory_tid =
+    mnn_reservations_get_single_field_value($node, 'field_reservations_inventory', 'tid');
+
+  if ($inventory_tid && !user_access('manage reservations inventory')) {
+      return NODE_ACCESS_DENY;
+  }
+  
+  return NODE_ACCESS_IGNORE;
+}
+
+
+/**
+  * Helper function to get a single value off of a entity 
+ */
+function mnn_reservations_get_single_field_value($entity, 
+						 $field_name,
+						 $index = 'value') {
+  if (isset($entity->{$field_name})) {
+    $field = $entity->{$field_name};
+    if (isset($field[LANGUAGE_NONE]) &&
+        isset($field[LANGUAGE_NONE][0]) &&
+        isset($field[LANGUAGE_NONE][0][$index])) {
+      return $field[LANGUAGE_NONE][0][$index];
+    }
+  }
+  return NULL;
+}

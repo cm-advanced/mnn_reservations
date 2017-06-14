@@ -1,0 +1,13 @@
+name = MNN Reservations
+description = "Small tweaks to reservations for MNN"
+
+files[] = mnn_reservations.module
+
+package = "MNN Community Media Advanced"
+version = "7.x-1.0"
+core = "7.x"
+project = "mnn_reservations"
+project_status_url = https://github.com/cm-advanced/mnn_reservations
+php = "5.2.4"
+
+
